@@ -1,24 +1,23 @@
-"""Windows Dropbox rclone auto-mount helper.
+"""Simple Windows app to mount Dropbox via rclone.
 
-Supports:
-- Starting mounts immediately.
-- Installing Windows services (auto start at boot) for both mounts.
+Mount targets:
+- Z:
+- C:\\mount\\dropbox
 """
 
 from __future__ import annotations
 
-import argparse
 import os
 import subprocess
+import sys
+import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
+from tkinter import messagebox
 
 REMOTE = "dropbox:"
 DRIVE_MOUNT = r"Z:"
 FOLDER_MOUNT = r"C:\mount\dropbox"
-
-SERVICE_Z = "RcloneDropboxDriveZ"
-SERVICE_FOLDER = "RcloneDropboxFolder"
 
 
 @dataclass(frozen=True)
@@ -52,7 +51,7 @@ def start_mount(config: MountConfig) -> subprocess.Popen[str]:
 
 
 def mount_dropbox() -> tuple[subprocess.Popen[str], subprocess.Popen[str]]:
-    """Mount dropbox: to both Z: and C:\\mount\\dropbox right now."""
+    """Mount dropbox: to both Z: and C:\\mount\\dropbox."""
     if os.name != "nt":
         raise RuntimeError("This app is intended to run on Windows.")
 
@@ -62,76 +61,54 @@ def mount_dropbox() -> tuple[subprocess.Popen[str], subprocess.Popen[str]]:
     return proc_drive, proc_folder
 
 
-def build_service_binpath(config: MountConfig, rclone_path: str = "rclone.exe") -> str:
-    """Build `sc create` binPath value for one mount service."""
-    return subprocess.list2cmdline([rclone_path, "mount", config.remote, config.mountpoint, "--vfs-cache-mode", "writes"])
+class DropboxMounterApp:
+    def __init__(self, root: tk.Tk) -> None:
+        self.root = root
+        root.title("Dropbox Rclone Mounter")
+        root.geometry("420x170")
 
+        tk.Label(
+            root,
+            text="Mount dropbox: to Z: and C:\\mount\\dropbox",
+            padx=10,
+            pady=20,
+        ).pack()
 
-def install_windows_service(service_name: str, config: MountConfig, rclone_path: str = "rclone.exe") -> None:
-    """Install or update a Windows service with auto-start startup type."""
-    if os.name != "nt":
-        raise RuntimeError("Service installation is only supported on Windows.")
+        self.status_var = tk.StringVar(value="Ready")
+        tk.Label(root, textvariable=self.status_var).pack(pady=(0, 10))
 
-    binpath = build_service_binpath(config, rclone_path=rclone_path)
+        tk.Button(root, text="Mount Dropbox", command=self.on_mount_click, width=20).pack()
 
-    subprocess.run(["sc.exe", "stop", service_name], check=False)  # noqa: S603
-    subprocess.run(["sc.exe", "delete", service_name], check=False)  # noqa: S603
+    def on_mount_click(self) -> None:
+        try:
+            mount_dropbox()
+        except FileNotFoundError:
+            messagebox.showerror("Error", "rclone was not found in PATH.")
+            self.status_var.set("Failed: rclone not found")
+            return
+        except RuntimeError as exc:
+            messagebox.showerror("Error", str(exc))
+            self.status_var.set("Failed: not on Windows")
+            return
+        except OSError as exc:
+            messagebox.showerror("Error", f"Failed to start mount: {exc}")
+            self.status_var.set("Failed to start mounts")
+            return
 
-    create_cmd = [
-        "sc.exe",
-        "create",
-        service_name,
-        f"binPath= {binpath}",
-        "start= auto",
-        "DisplayName= Rclone Dropbox Mount",
-    ]
-    subprocess.run(create_cmd, check=True)  # noqa: S603
-    subprocess.run(["sc.exe", "description", service_name, f"Mounts {config.remote} to {config.mountpoint}"], check=True)  # noqa: S603
-    subprocess.run(["sc.exe", "start", service_name], check=True)  # noqa: S603
-
-
-def install_autostart_services(rclone_path: str = "rclone.exe") -> None:
-    """Install and start both Dropbox mount services."""
-    ensure_mount_folder(FOLDER_MOUNT)
-    install_windows_service(SERVICE_Z, MountConfig(remote=REMOTE, mountpoint=DRIVE_MOUNT), rclone_path=rclone_path)
-    install_windows_service(
-        SERVICE_FOLDER,
-        MountConfig(remote=REMOTE, mountpoint=FOLDER_MOUNT),
-        rclone_path=rclone_path,
-    )
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Dropbox rclone mounter")
-    parser.add_argument("--headless", action="store_true", help="Start the two mounts immediately")
-    parser.add_argument(
-        "--install-service",
-        action="store_true",
-        help="Install two auto-start Windows services and start them now",
-    )
-    parser.add_argument(
-        "--rclone-path",
-        default="rclone.exe",
-        help="Path to rclone executable (used for service installation)",
-    )
-    return parser.parse_args()
+        self.status_var.set("Mount processes started for Z: and C:\\mount\\dropbox")
+        messagebox.showinfo("Success", "Started both rclone mount processes.")
 
 
 def main() -> int:
-    args = parse_args()
-
-    if args.install_service:
-        install_autostart_services(rclone_path=args.rclone_path)
-        print("Installed and started auto-start services for Z: and C:\\mount\\dropbox.")
-        return 0
-
-    if args.headless:
+    if "--headless" in sys.argv:
         mount_dropbox()
         print("Started both rclone mount processes.")
         return 0
 
-    print("No action selected. Use --install-service or --headless.")
-    return 1
+    root = tk.Tk()
+    DropboxMounterApp(root)
+    root.mainloop()
+    return 0
 
 
 if __name__ == "__main__":

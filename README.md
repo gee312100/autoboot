@@ -1,38 +1,31 @@
-# Dropbox Rclone Mounter (Windows Service + Boot Auto-Mount)
+# Dropbox Rclone Mounter (Windows)
 
-This project mounts the same `dropbox:` rclone remote to both:
+This app starts two `rclone mount` processes for the same Dropbox remote:
 
-- `Z:`
-- `C:\mount\dropbox`
-
-It now supports **Windows service installation** so mounts start automatically on boot.
+- `dropbox:` -> `Z:`
+- `dropbox:` -> `C:\mount\dropbox`
 
 ## Requirements
 
 - Windows
-- [rclone](https://rclone.org/) installed
-- A configured remote named `dropbox`
-- Run install command from an elevated shell (Administrator)
+- [rclone](https://rclone.org/) installed and available in `PATH`
+- A configured Dropbox remote named `dropbox`
 
-## Install as auto-start Windows services
+## Run (GUI)
 
 ```bash
-python dropbox_mounter.py --install-service --rclone-path "C:\Program Files\rclone\rclone.exe"
+python dropbox_mounter.py
 ```
 
-What this does:
+Click **Mount Dropbox**.
 
-- creates `C:\mount\dropbox` if needed
-- installs two Windows services:
-  - `RcloneDropboxDriveZ` (mounts to `Z:`)
-  - `RcloneDropboxFolder` (mounts to `C:\mount\dropbox`)
-- configures both services as `start= auto`
-- starts both services immediately
-
-After this, both mounts are re-established on system boot automatically.
-
-## One-time immediate mounts (no service install)
+## Run (headless)
 
 ```bash
 python dropbox_mounter.py --headless
 ```
+
+## Notes
+
+- The app creates `C:\mount\dropbox` if it does not exist.
+- It launches two background `rclone mount` processes.

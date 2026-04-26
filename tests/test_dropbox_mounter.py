@@ -4,7 +4,6 @@ from dropbox_mounter import (
     REMOTE,
     MountConfig,
     build_mount_command,
-    build_service_binpath,
 )
 
 
@@ -23,13 +22,3 @@ def test_build_mount_command_folder() -> None:
         "--vfs-cache-mode",
         "writes",
     ]
-
-
-def test_build_service_binpath_uses_rclone_path() -> None:
-    cmdline = build_service_binpath(
-        MountConfig(remote=REMOTE, mountpoint=DRIVE_MOUNT),
-        rclone_path=r"C:\Program Files\rclone\rclone.exe",
-    )
-    assert "C:\\Program Files\\rclone\\rclone.exe" in cmdline
-    assert "mount dropbox:" in cmdline
-    assert "Z:" in cmdline
